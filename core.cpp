@@ -1,20 +1,30 @@
 #include "common.h"
+
+/*  Defines  */
+
+#ifdef __AVR_ATtiny85__
+    #if F_CPU != 16000000UL || defined DISABLEMILLIS 
+        #error Board Configuration is wrong...
+    #endif
+    #define ATTINY85
+#elif not defined __AVR_ATmega32U4__
+    #error Sorry, Unsupported Board...
+#endif
+
 #ifdef ATTINY85
 #define SimpleWire_SCL_PORT B
 #define SimpleWire_SCL_POS  2
 #define SimpleWire_SDA_PORT B
 #define SimpleWire_SDA_POS  0
 #else
-#define SimpleWire_SCL_PORT C
-#define SimpleWire_SCL_POS  5
-#define SimpleWire_SDA_PORT C
-#define SimpleWire_SDA_POS  4
+#define SimpleWire_SCL_PORT D
+#define SimpleWire_SCL_POS  0
+#define SimpleWire_SDA_PORT D
+#define SimpleWire_SDA_POS  1
 #endif
 #include "SimpleWire.h"
-
-/*  Defines  */
-
 #define SIMPLEWIRE      SimpleWire<SimpleWire_1M>
+
 #define SSD1306_ADDRESS 0x3C
 #define SSD1306_COMMAND 0x00
 #define SSD1306_DATA    0x40
@@ -24,6 +34,7 @@
 #else
 #define BUTTON_ROWS     4
 #define BUTTON_COLS     4
+#define LONG_PRESS      10
 #endif
 
 /*  Macro functions  */
@@ -134,6 +145,7 @@ uint8_t getDownButton(void)
         }
     }
 #else
+    static uint8_t pressCounter = 0;
     currentButton = BTN_NONE;
     for (uint8_t row = 0; currentButton == BTN_NONE && row < BUTTON_ROWS; row++) {
         uint8_t pin = pgm_read_byte(&buttonPinRow[row]);
@@ -144,6 +156,14 @@ uint8_t getDownButton(void)
             }
         }
         digitalWrite(pin, HIGH);
+    }
+    if (currentButton == BTN_ENTER && lastButton == BTN_ENTER) {
+        if (++pressCounter == LONG_PRESS) {
+            lastButton = BTN_NONE;
+            currentButton = BTN_CLEAR;
+        }
+    } else {
+        pressCounter = 0;
     }
 #endif
 

@@ -2,13 +2,6 @@
 
 #include <Arduino.h>
 
-#ifdef __AVR_ATtiny85__
-#if F_CPU != 16000000UL || defined DISABLEMILLIS 
-#error Board Configuration is wrong...
-#endif
-#define ATTINY85
-#endif
-
 /*  Defines  */
 
 #define WIDTH   128
@@ -47,7 +40,3 @@ uint8_t getDownButton(void);
 void    initCalc(void);
 bool    updateCalc(uint8_t button);
 void    drawCalc(int16_t y, uint8_t *pBuffer);
-
-/*  Macro Functions  */
-
-//#define circulate(n, v, m)  (((n) + (v) + (m)) % (m))
