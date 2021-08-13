@@ -3,20 +3,49 @@
 
 /*  Defines  */
 
-#define MAX_DISP_LEN 10
+#define RADIX       10
+#define LENGTH_MAX  8
+#define STACK_SIZE  16
+#define DECODE_MAX  12
+#define BIG_NUMBER  999999999UL
+
+/*  Typedefs  */
+
+typedef struct {
+    int32_t m;
+    int8_t  exp;
+} NUM_T;
+
 
 /*  Local Functions  */
 
-static void push(void);
-static void pop(void);
-static bool execute(uint8_t button);
-static void drawDispDigits(uint8_t *pBuffer, uint8_t row);
+static bool     modifyNumber(uint8_t button);
+static bool     enterNumber(void);
+static bool     operate(void (*opFunc)(NUM_T *a, NUM_T *b));
+
+static void     add(NUM_T *a, NUM_T *b);
+static void     sub(NUM_T *a, NUM_T *b);
+static void     multi(NUM_T *a, NUM_T *b);
+static void     div(NUM_T *a, NUM_T *b);
+
+static void     setZero(NUM_T *n);
+static int8_t   getLength(NUM_T *n);
+static void     align(NUM_T *a, NUM_T *b);
+static void     normalize(NUM_T *n);
+
+static int8_t   decodeNumber(NUM_T *n);
+static void     drawStack(uint8_t *pBuffer);
+static void     drawNumber(uint8_t *pBuffer, int16_t x, int8_t row);
 
 /*  Local Variables  */
 
-static float    stackX, stackY, stackZ, stackT;
-static String   disp;
-static bool     enterFlg, opFlg;
+PROGMEM static void (*const opFuncTable[])(NUM_T *a, NUM_T *b) = {
+    add, sub, multi, div
+};
+
+static NUM_T    stack[STACK_SIZE], *pStack;
+static uint8_t  decodeBuffer[DECODE_MAX];
+static bool     isEntering, isDotted, isError;
 
 /*---------------------------------------------------------------------------*/
 /*                               Main Functions                              */
@@ -24,119 +53,290 @@ static bool     enterFlg, opFlg;
 
 void initCalc(void)
 {
-    stackX = stackY = stackZ = stackT = 0;
-    disp = "";
-    enterFlg = opFlg = false;
+    pStack = &stack[0];
+    setZero(pStack);
+    isEntering = true;
+    isDotted = false;
+    isError = false;
 }
 
 bool updateCalc(uint8_t button)
 {
-    return execute(button);
+    if (button == BTN_CLEAR) {
+        initCalc();
+        return true;
+    } else if (!isError) {
+        if (button == BTN_ENTER) {
+            return enterNumber();
+        } else if (button >= BTN_PLUS && button <= BTN_DIV) {
+            void *opFunc = pgm_read_ptr(&opFuncTable[button - BTN_PLUS]);
+            return operate((void (*)(NUM_T *a, NUM_T *b))opFunc);
+        } else {
+            return modifyNumber(button);
+        }
+    }
+    return false;
 }
 
 void drawCalc(int16_t y, uint8_t *pBuffer)
 {
     clearScreenBuffer();
-    if (y == 8 || y == 16) drawDispDigits(pBuffer, (y - 8) >> 3);
+    if (y == 0) {
+        drawStack(pBuffer);
+        decodeNumber(pStack);
+    } else {
+        drawNumber(pBuffer, WIDTH + IMG_PADDING, (y - 8) >> 3);
+    }
 }
 
 /*---------------------------------------------------------------------------*/
 /*                             Control Functions                             */
 /*---------------------------------------------------------------------------*/
 
-static void push(void)
-{
-    stackT = stackZ;
-    stackZ = stackY;
-    stackY = stackX;
-}
-
-static void pop(void)
-{
-    stackX = stackY;
-    stackY = stackZ;
-    stackZ = stackT;
-}
-
-static bool execute(uint8_t button)
+static bool modifyNumber(uint8_t button)
 {
     bool ret = false;
-    
-    if (button >= BTN_PLUS && button <= BTN_DIV) {
-        float acc = stackX;
-        pop();
-        switch (button) {
-            case BTN_PLUS:  stackX += acc; break;
-            case BTN_MINUS: stackX -= acc; break;
-            case BTN_MULTI: stackX *= acc; break;
-            case BTN_DIV:   stackX /= acc; break;
-        }
-        disp = String(stackX);
-        opFlg = true;
-        enterFlg = false;
+    if (!isEntering && pStack < &stack[STACK_SIZE - 1]) {
+        pStack++;
+        setZero(pStack);
+        isEntering = true;
+        isDotted = false;
         ret = true;
-    } else if (button == BTN_ENTER) {
-        push();
-        disp = String(stackX);
-        enterFlg = true;
-        opFlg = false;
-        ret = true;
-    } else if (button == BTN_CLEAR) {
-        initCalc();
-        ret = true;
-    } else {
-        if (enterFlg) {
-            disp = "";
-            enterFlg = false;
-        } else if (opFlg) {
-            push();
-            disp = "";
-            opFlg = false;
-        }
+    }
+    if (isEntering) {
         if (button >= BTN_0 && button <= BTN_9) {
-            if (disp.length() < MAX_DISP_LEN) {
-                disp.concat(button - BTN_0);
-                stackX = disp.toFloat();
+            if (getLength(pStack) < LENGTH_MAX && 1 - pStack->exp < LENGTH_MAX) {
+                pStack->m = pStack->m * RADIX + (button - BTN_0);
+                if (isDotted) pStack->exp--;
                 ret = true;
             }
         } else if (button == BTN_DOT) {
-            if (disp.indexOf(".") == -1 && disp.length() < MAX_DISP_LEN - 3) {
-                disp.concat(".");
-                stackX = disp.toFloat();
+            if (!isDotted) {
+                isDotted = true;
                 ret = true;
             }
         } else if (button == BTN_INVERT) {
-            if (disp.charAt(0) == '-') {
-                disp = disp.substring(1);
-            } else {
-                disp = "-" + disp;
+            if (pStack->m != 0) {
+                pStack->m = -pStack->m;
+                ret = true;
             }
-            stackX = disp.toFloat();
-            ret = true;
         }
     }
-
     return ret;
 }
 
-static void drawDispDigits(uint8_t *pBuffer, uint8_t row)
+static bool enterNumber(void)
 {
-    int16_t x = 0;
-    uint8_t r = row * IMG_DIGIT_W;
-    uint8_t len = disp.length();
+    if (isEntering) {
+        normalize(pStack);
+        isEntering = false;
+    } else if (pStack < &stack[STACK_SIZE - 1]) {
+        pStack++;
+        *pStack = *(pStack - 1);
+    }
+    return true;
+}
 
-    if (len > MAX_DISP_LEN) {
-        // Error
-        memcpy_P(&pBuffer[x], &imgDigit[12][r], IMG_DIGIT_W);
-    } else {
-        for (uint8_t i = 0; i < len && x < WIDTH; i++) {
-            char c = disp.charAt(i);
-            if (c >= '-' && c <= '9') {
-                int8_t w = (c == '.') ? IMG_DOT_W : IMG_DIGIT_W;
-                c -= '-' + (c >= '0');
-                memcpy_P(&pBuffer[x], &imgDigit[c][r], w);
-                x += w + IMG_PADDING;
+static bool operate(void (*opFunc)(NUM_T *a, NUM_T *b))
+{
+    bool ret = false;
+    if (pStack > &stack[0]) {
+        if (isEntering) normalize(pStack);
+        pStack--;
+        opFunc(pStack, pStack + 1);
+        if (pStack->exp > 0) isError = true;
+        isEntering = false;
+        ret = true;
+    }
+    return ret;
+}
+
+static void add(NUM_T *a, NUM_T *b)
+{
+    align(a, b);
+    a->m += b->m;
+    normalize(a);
+}
+
+static void sub(NUM_T *a, NUM_T *b)
+{
+    align(a, b);
+    a->m -= b->m;
+    normalize(a);
+}
+
+static void multi(NUM_T *a, NUM_T *b)
+{
+    int32_t mA = abs(a->m), mB = abs(b->m);
+    if (mB != 0) {
+        while (BIG_NUMBER / mB < mA) {
+            a->exp++;
+            if (mA % RADIX == 0) {
+                mA /= RADIX;
+            } else if (mB % RADIX == 0 || mB > mA) {
+                mB /= RADIX;
+            } else {
+                mA /= RADIX;
             }
         }
+    }
+    a->m = ((a->m < 0) == (b->m < 0)) ? mA * mB : -mA * mB;
+    a->exp += b->exp;
+    normalize(a);
+}
+
+static void div(NUM_T *a, NUM_T *b)
+{
+    if (b->m == 0) {
+        a->m = BIG_NUMBER;
+        a->exp = 99;
+        isError = true;
+        return;
+    }
+    int32_t odd = a->m % b->m;
+    a->m /= b->m;
+    a->exp -= b->exp;
+    int8_t len = getLength(a);
+    while (odd != 0 && len < LENGTH_MAX) {
+        odd *= RADIX;
+        int32_t d = odd / b->m;
+        a->m = a->m * RADIX + d;
+        len += (a->m != 0);
+        a->exp--;
+        odd -= d * b->m;
+    }
+    normalize(a);
+}
+
+static void setZero(NUM_T *n)
+{
+    n->m = 0;
+    n->exp = 0;
+}
+
+static int8_t getLength(NUM_T *n)
+{
+    int8_t len = 0;
+    int32_t m = abs(n->m);
+    int32_t z = 1;
+    while (m >= z) {
+        len++;
+        z *= RADIX;
+    }
+    return len;
+}
+
+static void align(NUM_T *a, NUM_T *b)
+{
+    if (a->exp < b->exp) {
+        align(b, a);
+        return;
+    }
+    int8_t len = getLength(a);
+    while (a->exp > b->exp) {
+        if (len < LENGTH_MAX) {
+            len++;
+            a->exp--;
+            a->m *= RADIX;
+        } else {
+            b->exp++;
+            b->m /= RADIX;
+        }
+    }
+}
+
+static void normalize(NUM_T *n)
+{
+    if (n->m == 0) {
+        setZero(n);
+        return;
+    }
+    int8_t len = getLength(n);
+    while (len > LENGTH_MAX || n->exp < 0 && n->m % RADIX == 0) {
+        len--;
+        n->exp++;
+        n->m /= RADIX;
+    }
+    while (n->exp > 0 && len < LENGTH_MAX) {
+        len++;
+        n->exp--;
+        n->m *= RADIX;
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+/*                              Draw Functions                               */
+/*---------------------------------------------------------------------------*/
+
+static int8_t decodeNumber(NUM_T *n)
+{
+    uint8_t *pBuf = decodeBuffer;
+    int32_t m = abs(n->m);
+    int8_t len = getLength(n) + (m == 0);
+    int8_t exp = n->exp;
+    if (len < 1 - exp) len = 1 - exp;
+
+    if (exp > 0) {
+        *pBuf++ = IMG_ID_BAR;
+        *pBuf++ = IMG_ID_E;
+        *pBuf++ = IMG_ID_BAR;
+    } else {
+        while (len > 0) {
+            if (len <= LENGTH_MAX) {
+                if (exp == 0) *pBuf++ = IMG_ID_DOT;
+                *pBuf++ = m % RADIX;
+            }
+            len--;
+            exp++;
+            m /= RADIX;
+        }
+        if (n->m < 0) *pBuf++ = IMG_ID_BAR;
+    }
+
+    *pBuf = IMG_ID_MAX;
+    return pBuf - decodeBuffer;
+}
+
+static void drawStack(uint8_t *pBuffer)
+{
+    int16_t x = WIDTH + IMG_SUB_PADDING;
+    for (NUM_T *n = pStack - 1; n >= &stack[0] && x >= STACK_SIZE * 2; n--) {
+        int16_t len = decodeNumber(n);
+        drawNumber(pBuffer, x, -1);
+        x -= (len + 1) * (IMG_SUB_DIGIT_W + IMG_SUB_PADDING) - (IMG_SUB_DIGIT_W - IMG_SUB_DOT_W); 
+    }
+
+    int8_t stackPos = &stack[STACK_SIZE - 1] - pStack;
+    uint8_t *p = pBuffer;
+    *p++ = 0x7F;
+    for (int8_t i = 0; i < STACK_SIZE - 1; i++) {
+        if (i >= stackPos) {
+            *p++ = 0x55;
+            *p++ = 0x6B;
+        } else {
+            *p++ = 0x41;
+            *p++ = 0x41;
+        }
+    }
+    *p++ = 0x7F;
+}
+
+static void drawNumber(uint8_t *pBuffer, int16_t x, int8_t row)
+{
+    for (uint8_t *pBuf = decodeBuffer; *pBuf < IMG_ID_MAX; pBuf++) {
+        const uint8_t *pImg;
+        int8_t w; 
+        if (row >= 0) {
+            pImg = &imgDigit[*pBuf][row * IMG_DIGIT_W];
+            w = (*pBuf == IMG_ID_DOT) ? IMG_DOT_W : IMG_DIGIT_W;
+            x -= IMG_PADDING;
+        } else {
+            pImg = imgSubDigit[*pBuf];
+            w = (*pBuf == IMG_ID_DOT) ? IMG_SUB_DOT_W : IMG_SUB_DIGIT_W;
+            x -= IMG_SUB_PADDING;
+        }
+        x -= w;
+        if (x < 0) break;
+        memcpy_P(&pBuffer[x], pImg, w);
     }
 }
