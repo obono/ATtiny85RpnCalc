@@ -8,6 +8,7 @@
 #define STACK_SIZE  16
 #define DECODE_MAX  12
 #define BIG_NUMBER  999999999UL
+#define EXP_MAX     99
 
 /*  Typedefs  */
 
@@ -19,8 +20,10 @@ typedef struct {
 
 /*  Local Functions  */
 
+static void     prepareNumber(void);
 static bool     modifyNumber(uint8_t button);
 static bool     enterNumber(void);
+static bool     clearNumber(void);
 static bool     operate(void (*opFunc)(NUM_T *a, NUM_T *b));
 
 static void     add(NUM_T *a, NUM_T *b);
@@ -36,6 +39,7 @@ static void     normalize(NUM_T *n);
 static int8_t   decodeNumber(NUM_T *n);
 static void     drawStack(uint8_t *pBuffer);
 static void     drawNumber(uint8_t *pBuffer, int16_t x, int8_t row);
+static void     drawEntering(uint8_t *pBuffer);
 
 /*  Local Variables  */
 
@@ -54,17 +58,17 @@ static bool     isEntering, isDotted, isError;
 void initCalc(void)
 {
     pStack = &stack[0];
-    setZero(pStack);
-    isEntering = true;
-    isDotted = false;
+    prepareNumber();
     isError = false;
 }
 
 bool updateCalc(uint8_t button)
 {
-    if (button == BTN_CLEAR) {
+    if (button == BTN_ALLCLEAR) {
         initCalc();
         return true;
+    } else if (button == BTN_CLEAR) {
+        return clearNumber();
     } else if (!isError) {
         if (button == BTN_ENTER) {
             return enterNumber();
@@ -86,6 +90,7 @@ void drawCalc(int16_t y, uint8_t *pBuffer)
         decodeNumber(pStack);
     } else {
         drawNumber(pBuffer, WIDTH + IMG_PADDING, (y - 8) >> 3);
+        if (y == 8 && isEntering) drawEntering(pBuffer);
     }
 }
 
@@ -93,14 +98,19 @@ void drawCalc(int16_t y, uint8_t *pBuffer)
 /*                             Control Functions                             */
 /*---------------------------------------------------------------------------*/
 
+static void prepareNumber(void)
+{
+    setZero(pStack);
+    isEntering = true;
+    isDotted = false;
+}
+
 static bool modifyNumber(uint8_t button)
 {
     bool ret = false;
     if (!isEntering && pStack < &stack[STACK_SIZE - 1]) {
         pStack++;
-        setZero(pStack);
-        isEntering = true;
-        isDotted = false;
+        prepareNumber();
         ret = true;
     }
     if (isEntering) {
@@ -137,6 +147,18 @@ static bool enterNumber(void)
     return true;
 }
 
+static bool clearNumber(void)
+{
+    if (pStack > &stack[0]) {
+        pStack--;
+        isEntering = false;
+    } else {
+        prepareNumber();
+    }
+    isError = false;
+    return true;
+}
+
 static bool operate(void (*opFunc)(NUM_T *a, NUM_T *b))
 {
     bool ret = false;
@@ -144,7 +166,8 @@ static bool operate(void (*opFunc)(NUM_T *a, NUM_T *b))
         if (isEntering) normalize(pStack);
         pStack--;
         opFunc(pStack, pStack + 1);
-        if (pStack->exp > 0) isError = true;
+        normalize(pStack);
+        if (pStack->exp > 0) isError = true; // too large
         isEntering = false;
         ret = true;
     }
@@ -155,14 +178,12 @@ static void add(NUM_T *a, NUM_T *b)
 {
     align(a, b);
     a->m += b->m;
-    normalize(a);
 }
 
 static void sub(NUM_T *a, NUM_T *b)
 {
     align(a, b);
     a->m -= b->m;
-    normalize(a);
 }
 
 static void multi(NUM_T *a, NUM_T *b)
@@ -182,14 +203,13 @@ static void multi(NUM_T *a, NUM_T *b)
     }
     a->m = ((a->m < 0) == (b->m < 0)) ? mA * mB : -mA * mB;
     a->exp += b->exp;
-    normalize(a);
 }
 
 static void div(NUM_T *a, NUM_T *b)
 {
     if (b->m == 0) {
         a->m = BIG_NUMBER;
-        a->exp = 99;
+        a->exp = EXP_MAX;
         isError = true;
         return;
     }
@@ -205,7 +225,6 @@ static void div(NUM_T *a, NUM_T *b)
         a->exp--;
         odd -= d * b->m;
     }
-    normalize(a);
 }
 
 static void setZero(NUM_T *n)
@@ -262,6 +281,7 @@ static void normalize(NUM_T *n)
         n->exp--;
         n->m *= RADIX;
     }
+    if (len + n->exp <= 1 - LENGTH_MAX) setZero(n); // too small
 }
 
 /*---------------------------------------------------------------------------*/
@@ -339,4 +359,9 @@ static void drawNumber(uint8_t *pBuffer, int16_t x, int8_t row)
         if (x < 0) break;
         memcpy_P(&pBuffer[x], pImg, w);
     }
+}
+
+static void drawEntering(uint8_t *pBuffer)
+{
+    memcpy_P(&pBuffer[0], imgEntering, IMG_ENTERING_W);
 }

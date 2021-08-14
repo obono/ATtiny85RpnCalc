@@ -28,6 +28,7 @@ enum : uint8_t {
     BTN_MULTI,
     BTN_DIV,
     BTN_CLEAR,
+    BTN_ALLCLEAR,
 };
 
 /*  Global Functions  */

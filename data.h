@@ -98,3 +98,10 @@ PROGMEM static const uint8_t imgSubDigit[][4] = { // 4x8 x13
     { 0x36, 0x49, 0x49, 0x00 }, // 'E'
     { 0x40, 0x00, 0x00, 0x00 }  // '.'
 };
+
+#define IMG_ENTERING_W  8
+#define IMG_ENTERING_H  8
+
+PROGMEM static const uint8_t imgEntering[8] = { // 8x8
+    0xE0, 0x90, 0xA8, 0x44, 0x22, 0x11, 0x0A, 0x04
+};

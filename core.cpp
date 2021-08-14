@@ -31,11 +31,13 @@
 
 #ifdef ATTINY85
 #define BUTTONS_PIN     A3
+#define LONG_PRESS_BTN  BTN_CLEAR
 #else
 #define BUTTON_ROWS     4
 #define BUTTON_COLS     4
-#define LONG_PRESS      10
+#define LONG_PRESS_BTN  BTN_ENTER
 #endif
+#define LONG_PRESS_WAIT 5
 
 /*  Macro functions  */
 
@@ -145,7 +147,6 @@ uint8_t getDownButton(void)
         }
     }
 #else
-    static uint8_t pressCounter = 0;
     currentButton = BTN_NONE;
     for (uint8_t row = 0; currentButton == BTN_NONE && row < BUTTON_ROWS; row++) {
         uint8_t pin = pgm_read_byte(&buttonPinRow[row]);
@@ -157,15 +158,17 @@ uint8_t getDownButton(void)
         }
         digitalWrite(pin, HIGH);
     }
-    if (currentButton == BTN_ENTER && lastButton == BTN_ENTER) {
-        if (++pressCounter == LONG_PRESS) {
+#endif
+
+    static uint8_t pressCounter = 0;
+    if (currentButton == LONG_PRESS_BTN && lastButton == LONG_PRESS_BTN) {
+        if (++pressCounter == LONG_PRESS_WAIT) {
             lastButton = BTN_NONE;
-            currentButton = BTN_CLEAR;
+            currentButton = BTN_ALLCLEAR;
         }
     } else {
         pressCounter = 0;
     }
-#endif
 
     uint8_t downButton = (lastButton == BTN_NONE) ? currentButton : BTN_NONE;
     lastButton = currentButton;
