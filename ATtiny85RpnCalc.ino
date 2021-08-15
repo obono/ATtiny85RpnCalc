@@ -1,3 +1,4 @@
+#include <util/delay.h>
 #include "common.h"
 
 /*  Defines  */
@@ -20,5 +21,5 @@ void loop(void)
         bool isInvalid = updateCalc(button);
         if (isInvalid) refreshScreen(drawCalc);
     }
-    delay(DELAY_LOOP);
+    _delay_ms(DELAY_LOOP);
 }

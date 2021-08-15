@@ -3,7 +3,7 @@
 /*  Defines  */
 
 #ifdef __AVR_ATtiny85__
-    #if F_CPU != 16000000UL || defined DISABLEMILLIS 
+    #if F_CPU != 4000000UL || not defined DISABLEMILLIS
         #error Board Configuration is wrong...
     #endif
     #define ATTINY85
