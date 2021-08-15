@@ -1,5 +1,28 @@
 # ATtiny85RpnCalc
 
+![Picture](doc/picture.jpg)![Key assign](doc/picture_key_assign.jpg)
+
+A RPN Calculator with ATtiny85.
+
+* 8 significant digits.
+* 16 Levels stack with overflow prevention.
+
+## Instruction
+
+![Instruction](doc/instruction.png)
+
+* 0~9, ., &plus;/&minus;
+  * Edit the current number.
+  * If it is determined, it's pushed into the stack and a new number is edited.
+* Enter
+  * Determine the current number.
+  * If it is already determined, it's duplicated and pushed into the stack.
+* &plus;, &minus;, &times;, &div;
+  * Pop a number from the stack and operate with the current number.
+* Clear
+  * Clear the current number and pop a number from the stack.
+  * All clear if this button is held long.
+
 ## Hardware
 
 ### Schematic
