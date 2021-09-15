@@ -1,4 +1,5 @@
 #include "common.h"
+#include <avr/sleep.h>
 
 /*  Defines  */
 
@@ -25,19 +26,29 @@
 #include "SimpleWire.h"
 #define SIMPLEWIRE      SimpleWire<SimpleWire_1M>
 
+#define DELAY_LONG_MS   200
+#define DELAY_SHORT_MS  50
+
 #define SSD1306_ADDRESS 0x3C
 #define SSD1306_COMMAND 0x00
 #define SSD1306_DATA    0x40
 
 #ifdef ATTINY85
-#define BUTTONS_PIN     A3
-#define LONG_PRESS_BTN  BTN_CLEAR
+#define VPERI_PIN       3
+#define RESUME_PIN      1
+#define BUTTONS_PIN     A2
 #else
-#define BUTTON_ROWS     4
-#define BUTTON_COLS     4
-#define LONG_PRESS_BTN  BTN_ENTER
+#define VPERI_PIN       14
+#define RESUME_PIN      15
+#define BUTTONS_PIN     A0
+#define DEBUG_PIN1      17
+#define DEBUG_PIN2      30
 #endif
-#define LONG_PRESS_WAIT 5
+
+/*  Local Functions  */
+
+static void setupDisplay(void);
+static void shutdownDisplay(void);
 
 /*  Macro functions  */
 
@@ -71,26 +82,15 @@ PROGMEM static const uint8_t ssd1306InitSequence[] = { // Initialization Sequenc
     0x00, 0x10,     // Set column start, at 0.
 };
 
-#ifdef ATTINY85
 PROGMEM static const uint16_t buttonInfoTable[] = {
-    buttonInfo(BTN_NONE,1015),  buttonInfo(BTN_PLUS, 971),  buttonInfo(BTN_ENTER, 933),
-    buttonInfo(BTN_DOT,  887),  buttonInfo(BTN_0,    827),  buttonInfo(BTN_1,     762),
-    buttonInfo(BTN_2,    696),  buttonInfo(BTN_3,    628),  buttonInfo(BTN_MINUS, 559),
-    buttonInfo(BTN_MULTI,479),  buttonInfo(BTN_6,    393),  buttonInfo(BTN_5,     316),
-    buttonInfo(BTN_4,    249),  buttonInfo(BTN_7,    189),  buttonInfo(BTN_8,     134),
-    buttonInfo(BTN_9,    87 ),  buttonInfo(BTN_DIV,  49 ),  buttonInfo(BTN_CLEAR, 15 ),
-    buttonInfo(BTN_INVERT,0 ),
+    buttonInfo(BTN_NONE,1008),  buttonInfo(BTN_ENTER,974),  buttonInfo(BTN_7,   936),
+    buttonInfo(BTN_4,    888),  buttonInfo(BTN_1,    830),  buttonInfo(BTN_0,   767),
+    buttonInfo(BTN_DOT,  700),  buttonInfo(BTN_2,    629),  buttonInfo(BTN_5,   553),
+    buttonInfo(BTN_8,    475),  buttonInfo(BTN_9,    397),  buttonInfo(BTN_6,   321),
+    buttonInfo(BTN_3,    252),  buttonInfo(BTN_INVERT,189), buttonInfo(BTN_PLUS,134),
+    buttonInfo(BTN_MINUS,87 ),  buttonInfo(BTN_MULTI,49 ),  buttonInfo(BTN_DIV, 15 ),
+    buttonInfo(BTN_CLEAR,0  ),
 };
-#else
-PROGMEM static const uint8_t buttonPinCol[BUTTON_COLS] = { 5, 4, 0, 1 };
-PROGMEM static const uint8_t buttonPinRow[BUTTON_ROWS] = { 9, 8, 7, 6 };
-PROGMEM static const uint8_t buttonTable[BUTTON_ROWS][BUTTON_COLS] = {
-    { BTN_7,  BTN_8,   BTN_9,     BTN_DIV   },
-    { BTN_4,  BTN_5,   BTN_6,     BTN_MULTI },
-    { BTN_1,  BTN_2,   BTN_3,     BTN_MINUS },
-    { BTN_0,  BTN_DOT, BTN_ENTER, BTN_PLUS  },
-};
-#endif
 
 static uint8_t  lastButton;
 static uint8_t  wireBuffer[WIDTH + 1];
@@ -99,25 +99,69 @@ static uint8_t  wireBuffer[WIDTH + 1];
 
 void initCore(void)
 {
-    // Setup display
+
+    pinMode(VPERI_PIN, OUTPUT);
+    pinMode(RESUME_PIN, INPUT_PULLUP);
+    pinMode(BUTTONS_PIN, INPUT);
+#ifndef ATTINY85
+    pinMode(DEBUG_PIN1, OUTPUT);
+    pinMode(DEBUG_PIN2, OUTPUT);
+    digitalWrite(DEBUG_PIN1, HIGH);
+    digitalWrite(DEBUG_PIN2, HIGH);
+#endif
+
+    setupDisplay();
+    lastButton = BTN_NONE;
+}
+
+void sleepCore(void)
+{
+    shutdownDisplay();
+#ifdef ATTINY85
+    GIMSK = 0x20;   // enable PCINT, do not allow INT0
+    PCMSK = 0x02;   // pin change mask, set interrupt pin to PCINT1
+    ADCSRA = 0x00;  // stop ADC (save 330uA)
+#else
+    digitalWrite(DEBUG_PIN2, LOW);
+    PCICR = 0x01;   // enable PCINT
+    PCMSK0 = 0x02;  // pin change mask, set interrupt pin to PCINT1
+#endif
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_mode();   // sleep_(enable + cpu + disable)
+#ifdef ATTINY85
+    GIMSK = 0x00;   // disable PCINT
+    ADCSRA = 0x80;  // restart ADC
+#else
+    PCICR = 0x00;   // disable PCING
+    digitalWrite(DEBUG_PIN2, HIGH);
+#endif
+    setupDisplay();
+    analogRead(BUTTONS_PIN);  // clear input charge of ADC
+}
+
+ISR(PCINT0_vect)
+{ 
+    // do nothing
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void setupDisplay(void)
+{
+    digitalWrite(VPERI_PIN, HIGH);
+    _delay_ms(DELAY_LONG_MS);
     SIMPLEWIRE::begin();
     memcpy_P(wireBuffer, ssd1306InitSequence, sizeof(ssd1306InitSequence));
     SIMPLEWIRE::write(SSD1306_ADDRESS, wireBuffer, sizeof(ssd1306InitSequence));
+}
 
-    // Setup buttons
-#ifdef ATTINY85
-    pinMode(BUTTONS_PIN, INPUT);
-#else
-    for (uint8_t row = 0; row < BUTTON_ROWS; row++) {
-        uint8_t pin = pgm_read_byte(&buttonPinRow[row]);
-        pinMode(pin, OUTPUT);
-        digitalWrite(pin, HIGH);
-    }
-    for (uint8_t col = 0; col < BUTTON_COLS; col++) {
-        pinMode(pgm_read_byte(&buttonPinCol[col]), INPUT_PULLUP);
-    }
-#endif
-    lastButton = BTN_NONE;
+static void shutdownDisplay(void)
+{
+    wireBuffer[0] = SSD1306_COMMAND;
+    wireBuffer[1] = 0xAE;
+    SIMPLEWIRE::write(SSD1306_ADDRESS, wireBuffer, 2);
+    _delay_ms(DELAY_LONG_MS);
+    digitalWrite(VPERI_PIN, LOW);
 }
 
 void refreshScreen(void (*func)(int16_t, uint8_t *))
@@ -134,10 +178,11 @@ void clearScreenBuffer(void)
     memset(&wireBuffer[1], 0, WIDTH);
 }
 
+/*---------------------------------------------------------------------------*/
+
 uint8_t getDownButton(void)
 {
     uint8_t currentButton;
-#ifdef ATTINY85
     uint16_t analogValue = analogRead(BUTTONS_PIN);
     for (uint8_t i = 0; i < sizeof(buttonInfoTable) / 2; i++) {
         uint16_t buttonInfo = pgm_read_word(&buttonInfoTable[i]);
@@ -146,31 +191,11 @@ uint8_t getDownButton(void)
             break;
         }
     }
-#else
-    currentButton = BTN_NONE;
-    for (uint8_t row = 0; currentButton == BTN_NONE && row < BUTTON_ROWS; row++) {
-        uint8_t pin = pgm_read_byte(&buttonPinRow[row]);
-        digitalWrite(pin, LOW);
-        for (uint8_t col = 0; currentButton == BTN_NONE && col < BUTTON_COLS; col++) {
-            if (digitalRead(pgm_read_byte(&buttonPinCol[col])) == LOW) {
-                currentButton = pgm_read_byte(&buttonTable[row][col]);
-            }
-        }
-        digitalWrite(pin, HIGH);
-    }
-#endif
-
-    static uint8_t pressCounter = 0;
-    if (currentButton == LONG_PRESS_BTN && lastButton == LONG_PRESS_BTN) {
-        if (++pressCounter == LONG_PRESS_WAIT) {
-            lastButton = BTN_NONE;
-            currentButton = BTN_ALLCLEAR;
-        }
-    } else {
-        pressCounter = 0;
-    }
 
     uint8_t downButton = (lastButton == BTN_NONE) ? currentButton : BTN_NONE;
     lastButton = currentButton;
+#ifndef ATTINY85
+    digitalWrite(DEBUG_PIN1, (downButton == BTN_NONE) ? HIGH : LOW);
+#endif
     return downButton;
 }

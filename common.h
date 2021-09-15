@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <util/delay.h>
 
 /*  Defines  */
 
@@ -28,12 +29,12 @@ enum : uint8_t {
     BTN_MULTI,
     BTN_DIV,
     BTN_CLEAR,
-    BTN_ALLCLEAR,
 };
 
 /*  Global Functions  */
 
 void    initCore(void);
+void    sleepCore(void);
 void    refreshScreen(void (*func)(int16_t, uint8_t *));
 void    clearScreenBuffer(void);
 uint8_t getDownButton(void);

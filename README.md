@@ -1,11 +1,13 @@
-# ATtiny85RpnCalc
+# ATtiny85RpnCalc (NEXTDAY version)
 
-![Picture](doc/picture.jpg)![Key assign](doc/picture_key_assign.jpg)
+![Picture](doc/picture.jpg)
 
 A RPN Calculator with ATtiny85.
 
 * 8 significant digits.
 * 16 Levels stack with overflow prevention.
+
+See https://nextday-kids.com/wp/2021/08/22/rpn/
 
 ## Instruction
 
@@ -19,15 +21,14 @@ A RPN Calculator with ATtiny85.
   * If it is already determined, it's duplicated and pushed into the stack.
 * &plus;, &minus;, &times;, &div;
   * Pop a number from the stack and operate with the current number.
-* Clear
+* BS
   * Clear the current number and pop a number from the stack.
-  * All clear if this button is held long.
 
 ## Hardware
 
 ### Schematic
 
-[![Click to expand](doc/schematic_thumbnail.png)](doc/schematic.png)
+:construction: Under construction... :construction:
 
 ## Software
 

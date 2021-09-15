@@ -64,10 +64,7 @@ void initCalc(void)
 
 bool updateCalc(uint8_t button)
 {
-    if (button == BTN_ALLCLEAR) {
-        initCalc();
-        return true;
-    } else if (button == BTN_CLEAR) {
+    if (button == BTN_CLEAR) {
         return clearNumber();
     } else if (!isError) {
         if (button == BTN_ENTER) {
