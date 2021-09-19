@@ -82,6 +82,16 @@ bool updateCalc(uint8_t button)
 void drawCalc(int16_t y, uint8_t *pBuffer)
 {
     clearScreenBuffer();
+#if DISPLAY == DISPLAY_LCD
+    if (y == 0) {
+        drawStack(pBuffer);
+        if (isEntering) drawEntering(pBuffer);
+        int8_t len = decodeNumber(pStack);
+        if (len > WIDTH) drawNumber(pBuffer, WIDTH, 1);
+    } else {
+        drawNumber(pBuffer, WIDTH, 0);
+    }
+#elif DISPLAY == DISPLAY_OLED
     if (y == 0) {
         drawStack(pBuffer);
         decodeNumber(pStack);
@@ -89,6 +99,7 @@ void drawCalc(int16_t y, uint8_t *pBuffer)
         drawNumber(pBuffer, WIDTH + IMG_PADDING, (y - 8) >> 3);
         if (y == 8 && isEntering) drawEntering(pBuffer);
     }
+#endif
 }
 
 /*---------------------------------------------------------------------------*/
@@ -111,14 +122,23 @@ static bool modifyNumber(uint8_t button)
         ret = true;
     }
     if (isEntering) {
+        int8_t len = getLength(pStack);
         if (button >= BTN_0 && button <= BTN_9) {
-            if (getLength(pStack) < LENGTH_MAX && 1 - pStack->exp < LENGTH_MAX) {
-                pStack->m = pStack->m * RADIX + (button - BTN_0);
+#if DISPLAY == DISPLAY_LCD
+            const int8_t lenMax = LENGTH_MAX - isDotted;
+#elif DISPLAY == DISPLAY_OLED
+            const int8_t lenMax = LENGTH_MAX;
+#endif
+            if (getLength(pStack) < lenMax && 1 - pStack->exp < lenMax) {
+                int8_t num = button - BTN_0;
+                if (pStack->m < 0) num = -num;
+                pStack->m = pStack->m * RADIX + num;
                 if (isDotted) pStack->exp--;
                 ret = true;
             }
         } else if (button == BTN_DOT) {
-            if (!isDotted) {
+            const int8_t lenMax = LENGTH_MAX;
+            if (!isDotted && len < lenMax) {
                 isDotted = true;
                 ret = true;
             }
@@ -278,7 +298,12 @@ static void normalize(NUM_T *n)
         n->exp--;
         n->m *= RADIX;
     }
-    if (len + n->exp <= 1 - LENGTH_MAX) setZero(n); // too small
+#if DISPLAY == DISPLAY_LCD
+    const int8_t expMin = 2 - LENGTH_MAX;
+#elif DISPLAY == DISPLAY_OLED
+    const int8_t expMin = 1 - LENGTH_MAX;
+#endif
+    if (len + n->exp <= expMin) setZero(n); // too small
 }
 
 /*---------------------------------------------------------------------------*/
@@ -291,16 +316,26 @@ static int8_t decodeNumber(NUM_T *n)
     int32_t m = abs(n->m);
     int8_t len = getLength(n) + (m == 0);
     int8_t exp = n->exp;
-    if (len < 1 - exp) len = 1 - exp;
+#if DISPLAY == DISPLAY_LCD
+    const int8_t lenMax = LENGTH_MAX - (exp < 0);
+#elif DISPLAY == DISPLAY_OLED
+    const int8_t lenMax = LENGTH_MAX;
+#endif
 
+    if (len < 1 - exp) len = 1 - exp;
     if (exp > 0) {
         *pBuf++ = IMG_ID_BAR;
         *pBuf++ = IMG_ID_E;
         *pBuf++ = IMG_ID_BAR;
     } else {
         while (len > 0) {
-            if (len <= LENGTH_MAX) {
-                if (exp == 0) *pBuf++ = IMG_ID_DOT;
+            if (len <= lenMax) {
+#if DISPLAY == DISPLAY_LCD
+                const bool isNeedDot = (exp == 0 && (pBuf > decodeBuffer || isEntering && isDotted));
+#elif DISPLAY == DISPLAY_OLED
+                const bool isNeedDot = (exp == 0);
+#endif
+                if (isNeedDot) *pBuf++ = IMG_ID_DOT;
                 *pBuf++ = m % RADIX;
             }
             len--;
@@ -313,6 +348,44 @@ static int8_t decodeNumber(NUM_T *n)
     *pBuf = IMG_ID_MAX;
     return pBuf - decodeBuffer;
 }
+
+/*---------------------------------------------------------------------------*/
+
+#if DISPLAY == DISPLAY_LCD
+
+static void drawStack(uint8_t *pBuffer)
+{
+    int8_t stackPos = pStack - &stack[0];
+    int8_t unitStackPos = stackPos / LCD_GLYPH_W;
+    const int8_t posMax = (STACK_SIZE - 1) / LCD_GLYPH_W;
+
+    for (uint8_t i = 0; i < posMax; i++) {
+        int8_t pos = posMax - 1 - i; 
+        if (pos == unitStackPos) {
+            pBuffer[i] = stackPos % LCD_GLYPH_W;
+        } else {
+            pBuffer[i] = (pos > unitStackPos) ? 0 : LCD_GLYPH_W;
+        }
+    }
+}
+
+static void drawNumber(uint8_t *pBuffer, int16_t x, int8_t row)
+{
+    for (uint8_t *pBuf = &decodeBuffer[row * WIDTH]; *pBuf < IMG_ID_MAX && x > 0; pBuf++) {
+        pBuffer[--x] = pgm_read_byte(&charDigit[*pBuf]);
+    }
+}
+
+static void drawEntering(uint8_t *pBuffer)
+{
+    pBuffer[4] = '*';
+}
+
+#endif
+
+/*---------------------------------------------------------------------------*/
+
+#if DISPLAY == DISPLAY_OLED
 
 static void drawStack(uint8_t *pBuffer)
 {
@@ -362,3 +435,5 @@ static void drawEntering(uint8_t *pBuffer)
 {
     memcpy_P(&pBuffer[0], imgEntering, IMG_ENTERING_W);
 }
+
+#endif

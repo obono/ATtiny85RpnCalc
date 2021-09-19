@@ -17,6 +17,8 @@ enum : uint8_t {
     IMG_ID_MAX
 };
 
+PROGMEM static const uint8_t charDigit[] = "0123456789-E.";
+
 #define IMG_DIGIT_W 12
 #define IMG_DIGIT_H 24
 #define IMG_DOT_W   2

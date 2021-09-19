@@ -5,9 +5,20 @@
 
 /*  Defines  */
 
-#define WIDTH   128
-#define HEIGHT  32
-#define PAGES   4
+#define DISPLAY_LCD     0
+#define DISPLAY_OLED    1
+#define DISPLAY         DISPLAY_OLED
+
+#if DISPLAY == DISPLAY_LCD
+#define WIDTH           8
+#define HEIGHT          2
+#define LCD_GLYPH_W     5
+#define LCD_GLYPH_H     8
+#elif DISPLAY == DISPLAY_OLED
+#define WIDTH           128
+#define HEIGHT          32
+#define PAGE_HEIGHT     8
+#endif
 
 enum : uint8_t {
     BTN_NONE = 0,

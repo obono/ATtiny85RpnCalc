@@ -1,6 +1,6 @@
 # ATtiny85RpnCalc (NEXTDAY version)
 
-![Picture](doc/picture.jpg)
+![Picture(OLED)](doc/picture.jpg) ![Picture(LCD)](doc/picture_lcd.jpg)
 
 A RPN Calculator with ATtiny85.
 
@@ -11,7 +11,7 @@ See https://nextday-kids.com/wp/2021/08/22/rpn/
 
 ## Instruction
 
-![Instruction](doc/instruction.png)
+![Instruction(OLED)](doc/instruction.png) ![Instruction(LCD)](doc/instruction_lcd.png)
 
 * 0~9, ., &plus;/&minus;
   * Edit the current number.
@@ -46,6 +46,14 @@ Save EEPROM      |EEPROM not retained
 Timer 1 Clock    |CPU (CPU frequency)
 LTO              |Enabled
 millis()/micros()|Disabled
+
+Currently the compile switch is set for OLED in ["common.h"](common.h#L10).
+
+```
+#define DISPLAY         DISPLAY_OLED
+```
+
+Modify this to `DISPLAY_LCD` if you would like to use LCD instead of OLED.
 
 ### Acknowledgement
 
