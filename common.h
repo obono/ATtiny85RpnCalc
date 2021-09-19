@@ -4,9 +4,9 @@
 
 /*  Defines  */
 
-#define WIDTH   128
-#define HEIGHT  32
-#define PAGES   4
+#define WIDTH       128
+#define HEIGHT      32
+#define PAGE_HEIGHT 8
 
 enum : uint8_t {
     BTN_NONE = 0,

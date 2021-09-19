@@ -116,7 +116,9 @@ static bool modifyNumber(uint8_t button)
     if (isEntering) {
         if (button >= BTN_0 && button <= BTN_9) {
             if (getLength(pStack) < LENGTH_MAX && 1 - pStack->exp < LENGTH_MAX) {
-                pStack->m = pStack->m * RADIX + (button - BTN_0);
+                int8_t num = button - BTN_0;
+                if (pStack->m < 0) num = -num;
+                pStack->m = pStack->m * RADIX + num;
                 if (isDotted) pStack->exp--;
                 ret = true;
             }

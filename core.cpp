@@ -123,7 +123,7 @@ void initCore(void)
 void refreshScreen(void (*func)(int16_t, uint8_t *))
 {
     wireBuffer[0] = SSD1306_DATA;
-    for (int16_t y = 0; y < HEIGHT; y += 8) {
+    for (int16_t y = 0; y < HEIGHT; y += PAGE_HEIGHT) {
         (func) ? func(y, &wireBuffer[1]) : clearScreenBuffer();
         SIMPLEWIRE::write(SSD1306_ADDRESS, wireBuffer, WIDTH + 1);
     }
