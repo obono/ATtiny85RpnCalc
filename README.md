@@ -25,6 +25,20 @@ A RPN Calculator with ATtiny85.
 
 ## Hardware
 
+### Components
+
+* ATtiny85
+* 0.91 inch 128&times;32 pixels OLED screen SSD1306 I2C
+* 18 tactile switches
+* Resistors
+  * 150&Omega;, 180&Omega;, 220&Omega;, 330&Omega;, 390&Omega;, 510&Omega;, 680&Omega;
+  * 1.0k&Omega;, 1.5k&Omega;&times;2, 2.2k&Omega;, 3.0k&Omega;, 4.7k&Omega;&times;2, 8.2k&Omega;
+  * 15k&Omega;, 22k&Omega;, 82k&Omega;
+* An electrolytic capacitor: 47&micro;F
+* A battery holder for CR2032
+* A slide switch
+* Wires, connectors, etc...
+
 ### Schematic
 
 [![Click to expand](doc/schematic_thumbnail.png)](doc/schematic.png)
