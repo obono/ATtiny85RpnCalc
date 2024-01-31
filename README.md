@@ -45,7 +45,7 @@ A RPN Calculator with ATtiny85.
 
 ## Software
 
-### Build enviroment
+### Build environment
 
 [Install ATTinyCore boards to the Arduino IDE](https://github.com/SpenceKonde/ATTinyCore/blob/master/Installation.md) and configure the settings as follows.
 
